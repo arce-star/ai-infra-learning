@@ -27,6 +27,8 @@ Build a minimal local LLM serving system with vLLM and make the request path con
 7. Final working environment: Python 3.12.3, PyTorch 2.13.0+cu129, vLLM 0.32.0+cu129, torchcodec 0.16.0+cu129 on an RTX 3090 (compute capability 8.6). A CUDA matrix multiply test succeeds and the vLLM CLI starts normally.
 8. Multi-index dependency resolution matters. `uv --index-strategy unsafe-best-match` was needed because the PyTorch CUDA index contained an older `requests` package that otherwise blocked dependency solving.
 9. Hugging Face Hub was unreachable from the AutoDL instance, so the same official Qwen checkpoint was downloaded from ModelScope instead. Model source and inference engine are separate concerns once the local checkpoint is complete.
+10. The first vLLM startup attempt reached model loading, torch.compile, CUDA graph capture and KV-cache allocation, then failed because FlashInfer's JIT sampler called the system `/usr/local/cuda/bin/nvcc` with an unsupported `--compress-mode=size` flag. Disabling the FlashInfer sampler allowed the server to start.
+11. `nvidia-smi` showing a GPU process does not prove the HTTP server is ready. A successful `/v1/models` response is a direct readiness signal. The container did not have the `ss` command installed, so endpoint checks were more useful than relying on port-inspection tooling.
 
 ### Model checkpoint downloaded
 
@@ -49,12 +51,19 @@ Important files:
 GPU: RTX 3090 24 GB
 Model: Qwen3-0.6B
 Checkpoint size: ~1.5 GB
-GPU memory after model load:
-Rough model loading time:
-First request result:
+GPU memory after model load/server startup: ~12.2 GiB
+vLLM setting: --gpu-memory-utilization 0.50
+Observed EngineCore process: ~12.2 GiB VRAM
+Model loading memory reported by vLLM: ~1.12 GiB
+CUDA graph memory reported by vLLM: ~0.30 GiB
+Available KV cache memory reported by vLLM: ~9.71 GiB
+GPU KV cache capacity: 90,928 tokens
+Max concurrency estimate at 4096 tokens/request: 22.20x
+/v1/models: success
+First /v1/chat/completions request: pending
 Short-prompt TTFT feeling:
 Long-prompt TTFT feeling:
-Anything surprising:
+Anything surprising: checkpoint size is much smaller than serving VRAM usage because vLLM reserves substantial memory for KV cache and runtime state.
 ```
 
 ### Explain in my own words
@@ -77,4 +86,4 @@ Anything surprising:
 
 ### Next step
 
-Load the local Qwen3-0.6B checkpoint with vLLM, observe memory allocation and startup logs, then make the first OpenAI-compatible API request.
+Send the first `/v1/chat/completions` request, then compare short / medium / long prompts and explain the serving path in my own words.
