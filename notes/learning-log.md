@@ -29,6 +29,7 @@ Build a minimal local LLM serving system with vLLM and make the request path con
 9. Hugging Face Hub was unreachable from the AutoDL instance, so the same official Qwen checkpoint was downloaded from ModelScope instead. Model source and inference engine are separate concerns once the local checkpoint is complete.
 10. The first vLLM startup attempt reached model loading, torch.compile, CUDA graph capture and KV-cache allocation, then failed because FlashInfer's JIT sampler called the system `/usr/local/cuda/bin/nvcc` with an unsupported `--compress-mode=size` flag. Disabling the FlashInfer sampler allowed the server to start.
 11. `nvidia-smi` showing a GPU process does not prove the HTTP server is ready. A successful `/v1/models` response is a direct readiness signal. The container did not have the `ss` command installed, so endpoint checks were more useful than relying on port-inspection tooling.
+12. The first `/v1/chat/completions` request succeeded. Qwen3 defaulted to thinking mode, emitted a `<think>` block, used all 128 completion tokens, and returned `finish_reason=length` before reaching the final answer. For clean serving tests, disable thinking with `chat_template_kwargs: {"enable_thinking": false}`.
 
 ### Model checkpoint downloaded
 
@@ -60,7 +61,10 @@ Available KV cache memory reported by vLLM: ~9.71 GiB
 GPU KV cache capacity: 90,928 tokens
 Max concurrency estimate at 4096 tokens/request: 22.20x
 /v1/models: success
-First /v1/chat/completions request: pending
+First /v1/chat/completions request: success
+First request usage: 23 prompt tokens + 128 completion tokens = 151 total tokens
+First request finish_reason: length
+First request note: Qwen3 default thinking mode consumed the 128-token budget before producing the final answer
 Short-prompt TTFT feeling:
 Long-prompt TTFT feeling:
 Anything surprising: checkpoint size is much smaller than serving VRAM usage because vLLM reserves substantial memory for KV cache and runtime state.
@@ -86,4 +90,4 @@ Anything surprising: checkpoint size is much smaller than serving VRAM usage bec
 
 ### Next step
 
-Send the first `/v1/chat/completions` request, then compare short / medium / long prompts and explain the serving path in my own words.
+Repeat the request with Qwen3 thinking disabled, then compare short / medium / long prompts and explain the serving path in my own words.
