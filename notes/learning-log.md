@@ -31,6 +31,8 @@ Build a minimal local LLM serving system with vLLM and make the request path con
 11. `nvidia-smi` showing a GPU process does not prove the HTTP server is ready. A successful `/v1/models` response is a direct readiness signal. The container did not have the `ss` command installed, so endpoint checks were more useful than relying on port-inspection tooling.
 12. The first `/v1/chat/completions` request succeeded. Qwen3 defaulted to thinking mode, emitted a `<think>` block, used all 128 completion tokens, and returned `finish_reason=length` before reaching the final answer. For clean serving tests, disable thinking with `chat_template_kwargs: {"enable_thinking": false}`.
 13. With thinking disabled, the second request completed normally with `finish_reason=stop`, but the 0.6B model still gave an incorrect explanation of inference decode. This separates serving correctness from model-quality correctness: the API/engine can work perfectly while the model output is semantically wrong.
+14. The first streaming benchmark measured TTFT and TPOT. TPOT stayed very stable across prompt lengths, around 2.45–2.67 ms/token (about 375–408 output tok/s), which is a clean decode-speed signal.
+15. The first TTFT sweep is not yet a clean prompt-length comparison. The short case was the first streaming request and paid extra first-use overhead, while medium and long share a large prefix and prefix caching is enabled. The benchmark should be repeated with warmup, unique prefixes, multiple repetitions and medians.
 
 ### Model checkpoint downloaded
 
@@ -70,8 +72,17 @@ Second request with thinking disabled: success
 Second request usage: 27 prompt tokens + 38 completion tokens = 65 total tokens
 Second request finish_reason: stop
 Second request note: serving succeeded, but the 0.6B model still explained decode incorrectly
-Short-prompt TTFT feeling:
-Long-prompt TTFT feeling:
+
+First streaming benchmark:
+short:  18 prompt tokens, TTFT 100.28 ms, TPOT 2.67 ms/token, 374.42 tok/s
+medium: 342 prompt tokens, TTFT 29.85 ms, TPOT 2.45 ms/token, 407.59 tok/s
+long: 1622 prompt tokens, TTFT 63.98 ms, TPOT 2.63 ms/token, 380.67 tok/s
+
+Interpretation:
+- TPOT is already stable and informative.
+- TTFT is confounded by first-use overhead and prefix-cache reuse, so do not interpret the short/medium/long ordering literally yet.
+- Total latency is approximately TTFT + decode duration. For example, the short case is about 100.28 ms + 63 × 2.67 ms ≈ 268.5 ms, close to the observed 269.19 ms.
+
 Anything surprising: checkpoint size is much smaller than serving VRAM usage because vLLM reserves substantial memory for KV cache and runtime state. Serving correctness and model-answer correctness are separate concerns.
 ```
 
@@ -95,4 +106,4 @@ Anything surprising: checkpoint size is much smaller than serving VRAM usage bec
 
 ### Next step
 
-Measure short / medium / long prompt TTFT and output speed, then explain the serving path in my own words.
+Repeat TTFT with a cleaner methodology: one warmup request, unique prefixes to defeat prefix-cache reuse, several repetitions per prompt length, and median reporting. Then benchmark concurrency.
