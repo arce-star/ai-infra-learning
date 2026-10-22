@@ -26,12 +26,29 @@ Build a minimal local LLM serving system with vLLM and make the request path con
 6. Replacing it with `torchcodec==0.16.0+cu129` fixed the remaining binary mismatch.
 7. Final working environment: Python 3.12.3, PyTorch 2.13.0+cu129, vLLM 0.32.0+cu129, torchcodec 0.16.0+cu129 on an RTX 3090 (compute capability 8.6). A CUDA matrix multiply test succeeds and the vLLM CLI starts normally.
 8. Multi-index dependency resolution matters. `uv --index-strategy unsafe-best-match` was needed because the PyTorch CUDA index contained an older `requests` package that otherwise blocked dependency solving.
+9. Hugging Face Hub was unreachable from the AutoDL instance, so the same official Qwen checkpoint was downloaded from ModelScope instead. Model source and inference engine are separate concerns once the local checkpoint is complete.
+
+### Model checkpoint downloaded
+
+Local path:
+
+`/root/autodl-tmp/ai-infra-lab/models/Qwen3-0.6B`
+
+Observed size: about 1.5 GB.
+
+Important files:
+
+- `model.safetensors`: model parameters / weights
+- `config.json`: model architecture/configuration
+- `generation_config.json`: generation defaults
+- `tokenizer.json`, `tokenizer_config.json`, `vocab.json`, `merges.txt`: tokenizer assets
 
 ### Lab 01 observations
 
 ```text
 GPU: RTX 3090 24 GB
-Model: Qwen/Qwen3-0.6B (planned)
+Model: Qwen3-0.6B
+Checkpoint size: ~1.5 GB
 GPU memory after model load:
 Rough model loading time:
 First request result:
@@ -60,4 +77,4 @@ Anything surprising:
 
 ### Next step
 
-Download the Qwen3-0.6B model explicitly to the AutoDL data disk, inspect the checkpoint files, then load that local checkpoint with vLLM and make the first OpenAI-compatible API request.
+Load the local Qwen3-0.6B checkpoint with vLLM, observe memory allocation and startup logs, then make the first OpenAI-compatible API request.
