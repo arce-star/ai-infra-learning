@@ -30,6 +30,7 @@ Build a minimal local LLM serving system with vLLM and make the request path con
 10. The first vLLM startup attempt reached model loading, torch.compile, CUDA graph capture and KV-cache allocation, then failed because FlashInfer's JIT sampler called the system `/usr/local/cuda/bin/nvcc` with an unsupported `--compress-mode=size` flag. Disabling the FlashInfer sampler allowed the server to start.
 11. `nvidia-smi` showing a GPU process does not prove the HTTP server is ready. A successful `/v1/models` response is a direct readiness signal. The container did not have the `ss` command installed, so endpoint checks were more useful than relying on port-inspection tooling.
 12. The first `/v1/chat/completions` request succeeded. Qwen3 defaulted to thinking mode, emitted a `<think>` block, used all 128 completion tokens, and returned `finish_reason=length` before reaching the final answer. For clean serving tests, disable thinking with `chat_template_kwargs: {"enable_thinking": false}`.
+13. With thinking disabled, the second request completed normally with `finish_reason=stop`, but the 0.6B model still gave an incorrect explanation of inference decode. This separates serving correctness from model-quality correctness: the API/engine can work perfectly while the model output is semantically wrong.
 
 ### Model checkpoint downloaded
 
@@ -65,9 +66,13 @@ First /v1/chat/completions request: success
 First request usage: 23 prompt tokens + 128 completion tokens = 151 total tokens
 First request finish_reason: length
 First request note: Qwen3 default thinking mode consumed the 128-token budget before producing the final answer
+Second request with thinking disabled: success
+Second request usage: 27 prompt tokens + 38 completion tokens = 65 total tokens
+Second request finish_reason: stop
+Second request note: serving succeeded, but the 0.6B model still explained decode incorrectly
 Short-prompt TTFT feeling:
 Long-prompt TTFT feeling:
-Anything surprising: checkpoint size is much smaller than serving VRAM usage because vLLM reserves substantial memory for KV cache and runtime state.
+Anything surprising: checkpoint size is much smaller than serving VRAM usage because vLLM reserves substantial memory for KV cache and runtime state. Serving correctness and model-answer correctness are separate concerns.
 ```
 
 ### Explain in my own words
@@ -90,4 +95,4 @@ Anything surprising: checkpoint size is much smaller than serving VRAM usage bec
 
 ### Next step
 
-Repeat the request with Qwen3 thinking disabled, then compare short / medium / long prompts and explain the serving path in my own words.
+Measure short / medium / long prompt TTFT and output speed, then explain the serving path in my own words.
